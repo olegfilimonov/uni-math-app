@@ -6,6 +6,7 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Controls;
 using System.Windows.Forms;
 using System.Windows.Media;
 using LiveCharts;
@@ -45,21 +46,18 @@ namespace eltech_math_app
         private bool show1 = true;
         private bool show2 = false;
         private bool show3 = false;
-        private bool show4 = false;
         private bool show5 = false;
         private bool show6 = false;
 
         private LineSeries f1Series = new LineSeries();
         private LineSeries f2Series = new LineSeries();
         private LineSeries f3Series = new LineSeries();
-        private LineSeries f4Series = new LineSeries();
         private LineSeries f5Series = new LineSeries();
         private LineSeries f6Series = new LineSeries();
 
         private ArrayList t1 = new ArrayList();
         private ArrayList t2 = new ArrayList();
         private ArrayList t3 = new ArrayList();
-        private ArrayList t4 = new ArrayList();
         private ArrayList t5 = new ArrayList();
         private ArrayList t6 = new ArrayList();
 
@@ -70,6 +68,8 @@ namespace eltech_math_app
         {
             InitializeComponent();
             dataGridView1.DataSource = dt;
+            comboBox1.Items.Add("2 степени");
+            comboBox1.SelectedIndex = 0;
         }
 
         private void calculateEverything()
@@ -77,6 +77,22 @@ namespace eltech_math_app
             DataTable dt = (DataTable) dataGridView1.DataSource;
             xValues = dt.AsEnumerable().Select(x => Convert.ToDouble(x["x"])).ToList();
             yValues = dt.AsEnumerable().Select(x => Convert.ToDouble(x["y"])).ToList();
+
+            if (comboBox1.Items.Count < xValues.Count - 2)
+            {
+                int selectedIndex = comboBox1.SelectedIndex;
+
+                comboBox1.Items.Clear();
+
+                for (int i = 2; i < xValues.Count; i++)
+                {
+                    comboBox1.Items.Add($"{i} степени");
+                }
+
+                comboBox1.SelectedIndex = selectedIndex;
+                return;
+            }
+
 
             var chartValues =
                 new ChartValues<ObservablePoint>(xValues.Select((x, i) => new ObservablePoint(x, yValues[i])));
@@ -96,7 +112,6 @@ namespace eltech_math_app
 
             calculateLinear();
             calculateParab();
-            calculateParab2();
             calculateHyperb();
             calculate3();
             calculate4();
@@ -179,13 +194,24 @@ namespace eltech_math_app
         private void calculateParab()
         {
             var count = (double) xValues.Count;
-            var p = Polyfit(xValues.ToArray(), yValues.ToArray(), 2);
 
-            var a = p[0];
-            var b = p[1];
-            var c = p[2];
+            var power = comboBox1.SelectedIndex;
 
-            f2Values = xValues.Select(x => a + b * x + c * x * x).ToList();
+            var p = Polyfit(xValues.ToArray(), yValues.ToArray(), power + 2);
+
+            var func = new Func<double, double>((x) =>
+            {
+                var res = 0d;
+
+                for (int i = 0; i <= power + 2; i++)
+                {
+                    res += Math.Pow(x, i) * p[i];
+                }
+
+                return res;
+            });
+
+            f2Values = xValues.Select(x => func(x)).ToList();
 
             var yDiff = yValues.Select((y, i) => Math.Pow(y - f2Values[i], 2)).ToList();
             var yDiffSum = yDiff.Sum();
@@ -208,7 +234,7 @@ namespace eltech_math_app
             for (var x = xValues.Min(); x <= xValues.Max(); x += (xValues.Max() - xValues.Min()) / 100)
             {
                 chartX.Add(x);
-                chartY.Add(a + b * x + c * x * x);
+                chartY.Add(func(x));
             }
 
             var chartValues =
@@ -225,7 +251,7 @@ namespace eltech_math_app
             f2Series.Stroke = Brushes.Orange;
             f2Series.Fill = Brushes.Transparent;
             f2Series.PointGeometry = null;
-            f2Series.Title = "Парабола 2 степени";
+            f2Series.Title = $"Парабола {(power + 2).ToString(format)} степени";
             if (f2Series.Values != null)
                 f2Series.Values.Clear();
             f2Series.Values = chartValues;
@@ -235,83 +261,20 @@ namespace eltech_math_app
                 cartesianChart1.Series.Add(f2Series);
             }
 
+            var eq = "";
+
+            for (int i = 0; i <= power + 2; i++)
+            {
+                eq += $"{(i == 0 ? "" : " + ")}{p[i].ToString(format)}{(i == 0 ? "" : $" * x ^ {i}")}";
+            }
+
             t2.Clear();
-            t2.Add($"y = {a.ToString(format)} + {b.ToString(format)}x + {c.ToString(format)}x^2");
+            t2.Add(eq);
             t2.Add(dOst.ToString(format));
             t2.Add(r.ToString(format));
             t2.Add(R.ToString(format));
             t2.Add(A.ToString(format));
             t2.Add(f1.ToString(format));
-        }
-
-        private void calculateParab2()
-        {
-            var count = (double) xValues.Count;
-            var p = Polyfit(xValues.ToArray(), yValues.ToArray(), 3);
-
-            var a = p[0];
-            var b = p[1];
-            var c = p[2];
-            var d = p[3];
-
-            f4Values = xValues.Select(x => a + b * x + c * x * x + d * x * x * x).ToList();
-
-            var yDiff = yValues.Select((y, i) => Math.Pow(y - f4Values[i], 2)).ToList();
-            var yDiffSum = yDiff.Sum();
-
-            var dOst = yDiffSum / count;
-
-            var r = Math.Sqrt(1 - yDiffSum / (yValues.Sum(y => Math.Pow(y - yValues.Average(), 2))));
-            var R = Math.Pow(r, 2);
-
-            var avrgValues = xValues.Select((x, i) => (Math.Abs((yValues[i] - f4Values[i]) / yValues[i]) * 100))
-                .ToList();
-
-            var A = 1 / count * avrgValues.Sum();
-
-            var f1 = R * (count - 3) / (1 - R) / 2;
-
-            var chartX = new List<double>();
-            var chartY = new List<double>();
-
-            for (var x = xValues.Min(); x <= xValues.Max(); x += (xValues.Max() - xValues.Min()) / 100)
-            {
-                chartX.Add(x);
-                chartY.Add(a + b * x + c * x * x + d * x * x * x);
-            }
-
-            var chartValues =
-                new ChartValues<ObservablePoint>(chartX.Select((x, i) => new ObservablePoint(x, chartY[i])));
-
-            var addAfter = false;
-            if (cartesianChart1.Series.Contains(f4Series))
-            {
-                cartesianChart1.Series.Remove(f4Series);
-                addAfter = true;
-            }
-
-            f4Series = new LineSeries();
-            f4Series.Stroke = Brushes.OrangeRed;
-            f4Series.Fill = Brushes.Transparent;
-            f4Series.PointGeometry = null;
-            f4Series.Title = "Парабола 3 степени";
-            if (f4Series.Values != null)
-                f4Series.Values.Clear();
-            f4Series.Values = chartValues;
-
-            if (addAfter)
-            {
-                cartesianChart1.Series.Add(f4Series);
-            }
-
-            t4.Clear();
-            t4.Add(
-                $"y = {a.ToString(format)} + {b.ToString(format)}x + {c.ToString(format)}x^2 + {d.ToString(format)}x^3");
-            t4.Add(dOst.ToString(format));
-            t4.Add(r.ToString(format));
-            t4.Add(R.ToString(format));
-            t4.Add(A.ToString(format));
-            t4.Add(f1.ToString(format));
         }
 
         private void calculate3()
@@ -390,7 +353,7 @@ namespace eltech_math_app
 
         private void calculate4()
         {
-            var count = (double)xValues.Count;
+            var count = (double) xValues.Count;
 
             var B =
                 (yValues.Select((y, i) => Math.Log(y) * (xValues[i])).Sum() - 1 / count *
@@ -570,7 +533,6 @@ namespace eltech_math_app
             dataGridView2.Rows.Clear();
             dataGridView2.Rows.Add(t1.ToArray());
             dataGridView2.Rows.Add(t2.ToArray());
-            dataGridView2.Rows.Add(t4.ToArray());
             dataGridView2.Rows.Add(t3.ToArray());
             dataGridView2.Rows.Add(t5.ToArray());
             dataGridView2.Rows.Add(t6.ToArray());
@@ -616,7 +578,6 @@ namespace eltech_math_app
             var show1 = checkBox1.Checked;
             var show2 = checkBox2.Checked;
             var show3 = checkBox3.Checked;
-            var show4 = checkBox6.Checked;
             var show5 = checkBox4.Checked;
             var show6 = checkBox5.Checked;
 
@@ -625,9 +586,6 @@ namespace eltech_math_app
 
             if (show2 && !cartesianChart1.Series.Contains(f2Series)) cartesianChart1.Series.Add(f2Series);
             if (!show2 && cartesianChart1.Series.Contains(f2Series)) cartesianChart1.Series.Remove(f2Series);
-
-            if (show4 && !cartesianChart1.Series.Contains(f4Series)) cartesianChart1.Series.Add(f4Series);
-            if (!show4 && cartesianChart1.Series.Contains(f4Series)) cartesianChart1.Series.Remove(f4Series);
 
             if (show3 && !cartesianChart1.Series.Contains(f3Series)) cartesianChart1.Series.Add(f3Series);
             if (!show3 && cartesianChart1.Series.Contains(f3Series)) cartesianChart1.Series.Remove(f3Series);
@@ -653,6 +611,15 @@ namespace eltech_math_app
 
         private void button1_Click(object sender, EventArgs e)
         {
+            if (xValues == null || xValues.Count == 0) return;
+
+            calculateEverything();
+        }
+
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (xValues == null || xValues.Count == 0) return;
+
             calculateEverything();
         }
     }
